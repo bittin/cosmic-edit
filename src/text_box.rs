@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use cosmic::{
-    cosmic_theme::palette::{blend::Compose, WithAlpha},
+    Renderer,
+    cosmic_theme::palette::{WithAlpha, blend::Compose},
     iced::{
+        Color, Element, Length, Padding, Point, Rectangle, Size, Vector,
         advanced::graphics::text::font_system,
         event::{Event, Status},
         keyboard::{Event as KeyEvent, Modifiers},
         mouse::{self, Button, Event as MouseEvent, ScrollDelta},
-        Color, Element, Length, Padding, Point, Rectangle, Size, Vector,
     },
     iced_core::{
+        Border, Radians, Shell,
         clipboard::Clipboard,
         image,
-        keyboard::{key::Named, Key},
+        keyboard::{Key, key::Named},
         layout::{self, Layout},
         renderer::{self, Quad, Renderer as _},
         widget::{
-            self,
+            self, Id, Widget,
             operation::{self, Operation},
-            tree, Id, Widget,
+            tree,
         },
-        Border, Radians, Shell,
     },
     theme::Theme,
-    Renderer,
 };
 use cosmic_text::{
     Action, BorrowedWithFontSystem, Edit, Metrics, Motion, Scroll, Selection, ViEditor,
@@ -35,7 +35,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{line_number::LineNumberKey, LINE_NUMBER_CACHE, SWASH_CACHE};
+use crate::{LINE_NUMBER_CACHE, SWASH_CACHE, line_number::LineNumberKey};
 
 pub struct TextBox<'a, Message> {
     editor: &'a Mutex<ViEditor<'static, 'static>>,
@@ -935,10 +935,23 @@ where
             editor.action(Action::Motion(motion));
         }
 
+        // Pre-select word for CTRL+<backspace> and CTRL+<delete>
+        fn delete_modifiers(
+            editor: &mut BorrowedWithFontSystem<'_, ViEditor<'static, 'static>>,
+            motion_to_apply: Motion,
+            modifiers: Modifiers,
+        ) {
+            if modifiers.control() && editor.selection() == Selection::None {
+                let cursor = editor.cursor();
+                editor.set_selection(Selection::Normal(cursor));
+                editor.action(Action::Motion(motion_to_apply));
+            }
+        }
+
         let mut status = Status::Ignored;
         match event {
             Event::Keyboard(KeyEvent::KeyPressed {
-                key: Key::Named(key),
+                modified_key: Key::Named(key),
                 modifiers,
                 ..
             }) if state.is_focused && !matches!(key, Named::Space) => match key {
@@ -983,15 +996,17 @@ where
                     status = Status::Captured;
                 }
                 Named::Backspace => {
+                    delete_modifiers(&mut editor, Motion::LeftWord, modifiers);
                     editor.action(Action::Backspace);
                     status = Status::Captured;
                 }
                 Named::Delete => {
+                    delete_modifiers(&mut editor, Motion::RightWord, modifiers);
                     editor.action(Action::Delete);
                     status = Status::Captured;
                 }
                 Named::Tab => {
-                    if !modifiers.control() {
+                    if !modifiers.control() && !modifiers.alt() {
                         if modifiers.shift() {
                             editor.action(Action::Unindent);
                         } else {
@@ -1002,9 +1017,6 @@ where
                 }
                 _ => (),
             },
-            Event::Keyboard(KeyEvent::ModifiersChanged(modifiers)) => {
-                state.modifiers = modifiers;
-            }
             Event::Keyboard(KeyEvent::KeyPressed { text, .. }) if state.is_focused => {
                 let character = text.unwrap_or_default().chars().next().unwrap_or_default();
                 // Only parse keys when Super, Ctrl, and Alt are not pressed
@@ -1014,6 +1026,9 @@ where
                     }
                     status = Status::Captured;
                 }
+            }
+            Event::Keyboard(KeyEvent::ModifiersChanged(modifiers)) => {
+                state.modifiers = modifiers;
             }
             Event::Mouse(MouseEvent::ButtonPressed(button)) => {
                 if let Some(p) = cursor_position.position_in(layout.bounds()) {
@@ -1192,35 +1207,16 @@ where
             }
             Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
                 if let Some(_p) = cursor_position.position_in(layout.bounds()) {
-                    match delta {
+                    let pixels = match delta {
                         ScrollDelta::Lines { x: _, y } => {
                             //TODO: this adjustment is just a guess!
-                            state.scroll_pixels = 0.0;
-                            let lines = (-y * 6.0) as i32;
-                            if lines != 0 {
-                                editor.action(Action::Scroll { lines });
-                            }
-                            status = Status::Captured;
-                        }
-                        ScrollDelta::Pixels { x: _, y } => {
-                            //TODO: this adjustment is just a guess!
-                            state.scroll_pixels -= y * 6.0;
-                            let mut lines = 0;
                             let metrics = editor.with_buffer(|buffer| buffer.metrics());
-                            while state.scroll_pixels <= -metrics.line_height {
-                                lines -= 1;
-                                state.scroll_pixels += metrics.line_height;
-                            }
-                            while state.scroll_pixels >= metrics.line_height {
-                                lines += 1;
-                                state.scroll_pixels -= metrics.line_height;
-                            }
-                            if lines != 0 {
-                                editor.action(Action::Scroll { lines });
-                            }
-                            status = Status::Captured;
+                            -y * metrics.line_height
                         }
-                    }
+                        ScrollDelta::Pixels { x: _, y } => -y,
+                    } * 4.0;
+                    editor.action(Action::Scroll { pixels });
+                    status = Status::Captured;
                 }
             }
             _ => (),
@@ -1268,7 +1264,6 @@ pub struct State {
     editor_offset_x: Cell<i32>,
     is_focused: bool,
     scale_factor: Cell<f32>,
-    scroll_pixels: f32,
     scrollbar_v_rect: Cell<Rectangle<f32>>,
     scrollbar_h_rect: Cell<Option<Rectangle<f32>>>,
     handle_opt: Mutex<Option<image::Handle>>,
@@ -1284,7 +1279,6 @@ impl State {
             editor_offset_x: Cell::new(0),
             is_focused: false,
             scale_factor: Cell::new(1.0),
-            scroll_pixels: 0.0,
             scrollbar_v_rect: Cell::new(Rectangle::default()),
             scrollbar_h_rect: Cell::new(None),
             handle_opt: Mutex::new(None),

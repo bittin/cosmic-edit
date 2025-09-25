@@ -61,7 +61,9 @@ impl ProjectNode {
                     icon_cache_get("go-next-symbolic", size)
                 }
             }
-            Self::File { path, .. } => icon::icon(mime_icon(mime_for_path(path), size)).size(size),
+            Self::File { path, .. } => {
+                icon::icon(mime_icon(mime_for_path(path, None, false), size)).size(size)
+            }
         }
     }
 
@@ -89,7 +91,7 @@ impl Ord for ProjectNode {
                 }
             }
         }
-        crate::localize::sorter().compare(self.name(), other.name())
+        crate::localize::LANGUAGE_SORTER.compare(self.name(), other.name())
     }
 }
 

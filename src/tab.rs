@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use cosmic::{
-    iced::{advanced::graphics::text::font_system, Point},
+    iced::{Point, advanced::graphics::text::font_system},
     widget::icon,
 };
-use cosmic_files::mime_icon::{mime_for_path, mime_icon, FALLBACK_MIME_ICON};
+use cosmic_files::mime_icon::{FALLBACK_MIME_ICON, mime_for_path, mime_icon};
 use cosmic_text::{Attrs, Buffer, Cursor, Edit, Selection, Shaping, SyntaxEditor, ViEditor, Wrap};
 use notify::Watcher;
 use regex::Regex;
@@ -16,7 +16,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{fl, git::GitDiff, Config, SYNTAX_SYSTEM};
+use crate::{Config, SYNTAX_SYSTEM, fl, git::GitDiff};
 
 pub enum Tab {
     Editor(EditorTab),
@@ -56,6 +56,7 @@ impl EditorTab {
             "",
             &attrs,
             Shaping::Advanced,
+            None,
         );
 
         let editor = SyntaxEditor::new(
@@ -128,11 +129,33 @@ impl EditorTab {
             let scroll = editor.with_buffer(|buffer| buffer.scroll());
             //TODO: save/restore more?
 
-            match editor.load_text(path, self.attrs.clone()) {
-                Ok(()) => {
+            match std::fs::read_to_string(path) {
+                Ok(file_content) => {
                     log::info!("reloaded {:?}", path);
 
-                    // Clear changed state
+                    // Store the entire operation as a single change for undo
+                    editor.start_change();
+
+                    // Grab everything in the buffer
+                    let cursor_start: Cursor = cosmic_text::Cursor::new(0, 0);
+                    let cursor_end = editor.with_buffer(|buffer| {
+                        let last_line = buffer.lines.len().saturating_sub(1);
+                        cosmic_text::Cursor::new(
+                            last_line,
+                            buffer
+                                .lines
+                                .get(last_line)
+                                .map(|line| line.text().len())
+                                .unwrap_or(0),
+                        )
+                    });
+
+                    // Replace everything in the buffer with the content from disk
+                    editor.delete_range(cursor_start, cursor_end);
+                    editor.insert_at(cursor_start, &file_content, None);
+                    editor.set_cursor(cursor_start);
+
+                    editor.finish_change();
                     editor.set_changed(false);
                 }
                 Err(err) => {
@@ -237,7 +260,7 @@ impl EditorTab {
 
     pub fn icon(&self, size: u16) -> icon::Icon {
         match &self.path_opt {
-            Some(path) => icon::icon(mime_icon(mime_for_path(path), size)).size(size),
+            Some(path) => icon::icon(mime_icon(mime_for_path(path, None, false), size)).size(size),
             None => icon::from_name(FALLBACK_MIME_ICON).size(size).icon(),
         }
     }
@@ -286,13 +309,26 @@ impl EditorTab {
                 end.index = index + len;
 
                 editor.start_change();
+                // if index = 0 and len = 0, we are targeting and deleting an empty line
+                // we'll move either cursor or end to delete the newline
+                if index == 0 && len == 0 {
+                    if cursor.line > 0 {
+                        // move the cursor up one line
+                        cursor.line -= 1;
+                        cursor.index =
+                            editor.with_buffer(|buffer| buffer.lines[cursor.line].text().len());
+                    } else if cursor.line + 1 < editor.with_buffer(|buffer| buffer.lines.len()) {
+                        // move the end down one line
+                        end.line += 1;
+                        end.index = 0;
+                    }
+                }
                 editor.delete_range(cursor, end);
                 cursor = editor.insert_at(cursor, replace, None);
                 editor.set_cursor(cursor);
                 // Need to disable selection to prevent the new cursor showing selection to old location
                 editor.set_selection(Selection::None);
                 editor.finish_change();
-
                 return true;
             }
 

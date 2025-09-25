@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use cosmic::surface;
 use cosmic::widget::menu::action::MenuAction;
 use cosmic::widget::menu::key_bind::KeyBind;
 use cosmic::widget::segmented_button::Entity;
 use cosmic::{
-    action,
-    app::{context_drawer, Core, Settings, Task},
+    Application, ApplicationExt, Apply, Element, action,
+    app::{Core, Settings, Task, context_drawer},
     cosmic_config::{self, CosmicConfigEntry},
     cosmic_theme, executor,
     font::Font,
     iced::{
-        self,
+        self, Alignment, Background, Color, Length, Limits, Point, Subscription,
         advanced::graphics::text::font_system,
         clipboard, event,
         futures::{self, SinkExt},
         keyboard::{self, Modifiers},
-        stream, window, Alignment, Background, Color, Length, Limits, Point, Subscription,
+        stream, window,
     },
     style, theme,
-    widget::{self, button, icon, nav_bar, segmented_button},
-    Application, ApplicationExt, Apply, Element,
+    widget::{self, about::About, button, icon, nav_bar, segmented_button},
 };
 use cosmic_files::{
-    dialog::{Dialog, DialogKind, DialogMessage, DialogResult},
+    dialog::{Dialog, DialogKind, DialogMessage, DialogResult, DialogSettings},
     mime_icon::{mime_for_path, mime_icon},
 };
 use cosmic_text::{Cursor, Edit, Family, Selection, SwashCache, SyntaxSystem, ViMode};
@@ -37,7 +37,7 @@ use std::{
 };
 use tokio::time;
 
-use config::{AppTheme, Config, ConfigState, CONFIG_VERSION};
+use config::{AppTheme, CONFIG_VERSION, Config, ConfigState};
 mod config;
 
 use git::{GitDiff, GitDiffLine, GitRepository, GitStatus, GitStatusKind};
@@ -389,6 +389,7 @@ pub enum Message {
     SaveAsResult(segmented_button::Entity, DialogResult),
     Scroll(f32),
     SelectAll,
+    Surface(surface::Action),
     SystemThemeModeChange(cosmic_theme::ThemeMode),
     SyntaxTheme(usize, bool),
     TabActivate(segmented_button::Entity),
@@ -438,6 +439,7 @@ pub enum Find {
 
 pub struct App {
     core: Core,
+    about: About,
     nav_model: segmented_button::SingleSelectModel,
     tab_model: segmented_button::SingleSelectModel,
     config_handler: Option<cosmic_config::Config>,
@@ -848,39 +850,7 @@ impl App {
         ])
     }
 
-    fn about(&self) -> Element<Message> {
-        let cosmic_theme::Spacing { space_xxs, .. } = self.core().system_theme().cosmic().spacing;
-        let repository = "https://github.com/pop-os/cosmic-edit";
-        let hash = env!("VERGEN_GIT_SHA");
-        let short_hash: String = hash.chars().take(7).collect();
-        let date = env!("VERGEN_GIT_COMMIT_DATE");
-        widget::column::with_children(vec![
-                widget::svg(widget::svg::Handle::from_memory(
-                    &include_bytes!(
-                        "../res/icons/hicolor/128x128/apps/com.system76.CosmicEdit.svg"
-                    )[..],
-                ))
-                .into(),
-                widget::text::title3(fl!("cosmic-text-editor")).into(),
-                widget::button::link(repository)
-                    .on_press(Message::LaunchUrl(repository.to_string()))
-                    .padding(0)
-                    .into(),
-                widget::button::link(fl!(
-                    "git-description",
-                    hash = short_hash.as_str(),
-                    date = date
-                ))
-                    .on_press(Message::LaunchUrl(format!("{}/commits/{}", repository, hash)))
-                    .padding(0)
-                .into(),
-            ])
-        .align_x(Alignment::Center)
-        .spacing(space_xxs)
-        .into()
-    }
-
-    fn document_statistics(&self) -> Element<Message> {
+    fn document_statistics(&self) -> Element<'_, Message> {
         //TODO: calculate in the background
         let mut character_count = 0;
         let mut character_count_no_spaces = 0;
@@ -909,28 +879,30 @@ impl App {
             });
         }
 
-        widget::settings::view_column(vec![widget::settings::section()
-            .add(
-                widget::settings::item::builder(fl!("word-count"))
-                    .control(widget::text(word_count.to_string())),
-            )
-            .add(
-                widget::settings::item::builder(fl!("character-count"))
-                    .control(widget::text(character_count.to_string())),
-            )
-            .add(
-                widget::settings::item::builder(fl!("character-count-no-spaces"))
-                    .control(widget::text(character_count_no_spaces.to_string())),
-            )
-            .add(
-                widget::settings::item::builder(fl!("line-count"))
-                    .control(widget::text(line_count.to_string())),
-            )
-            .into()])
+        widget::settings::view_column(vec![
+            widget::settings::section()
+                .add(
+                    widget::settings::item::builder(fl!("word-count"))
+                        .control(widget::text(word_count.to_string())),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("character-count"))
+                        .control(widget::text(character_count.to_string())),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("character-count-no-spaces"))
+                        .control(widget::text(character_count_no_spaces.to_string())),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("line-count"))
+                        .control(widget::text(line_count.to_string())),
+                )
+                .into(),
+        ])
         .into()
     }
 
-    fn git_management(&self) -> Element<Message> {
+    fn git_management(&self) -> Element<'_, Message> {
         let spacing = self.core().system_theme().cosmic().spacing;
 
         if let Some(project_status) = &self.git_project_status {
@@ -1110,7 +1082,7 @@ impl App {
         }
     }
 
-    fn project_search(&self) -> Element<Message> {
+    fn project_search(&self) -> Element<'_, Message> {
         let spacing = self.core().system_theme().cosmic().spacing;
 
         let search_input = widget::text_input::search_input(
@@ -1180,10 +1152,12 @@ impl App {
                 items
             }
             None => {
-                vec![search_input
-                    .on_input(Message::ProjectSearchValue)
-                    .on_submit(|_| Message::ProjectSearchSubmit)
-                    .into()]
+                vec![
+                    search_input
+                        .on_input(Message::ProjectSearchValue)
+                        .on_submit(|_| Message::ProjectSearchSubmit)
+                        .into(),
+                ]
             }
         };
 
@@ -1193,7 +1167,7 @@ impl App {
             .into()
     }
 
-    fn settings(&self) -> Element<Message> {
+    fn settings(&self) -> Element<'_, Message> {
         let app_theme_selected = match self.config.app_theme {
             AppTheme::Dark => 1,
             AppTheme::Light => 2,
@@ -1362,8 +1336,24 @@ impl Application for App {
             zoom_steps.push(zoom_step);
         }
 
+        let about = About::default()
+            .name(fl!("cosmic-text-editor"))
+            .icon(icon::from_name(Self::APP_ID))
+            .version(env!("CARGO_PKG_VERSION"))
+            .author("System76")
+            .license("GPL-3.0-only")
+            .developers([("Jeremy Soller", "jeremy@system76.com")])
+            .links([
+                (fl!("repository"), "https://github.com/pop-os/cosmic-edit"),
+                (
+                    fl!("support"),
+                    "https://github.com/pop-os/cosmic-edit/issues",
+                ),
+            ]);
+
         let mut app = App {
             core,
+            about,
             nav_model: nav_bar::Model::builder().build(),
             tab_model: segmented_button::Model::builder().build(),
             config_handler: flags.config_handler,
@@ -1427,7 +1417,7 @@ impl Application for App {
     }
 
     // The default nav_bar widget needs to be condensed for cosmic-edit
-    fn nav_bar(&self) -> Option<Element<action::Action<Self::Message>>> {
+    fn nav_bar(&self) -> Option<Element<'_, action::Action<Self::Message>>> {
         if !self.core().nav_bar_active() {
             return None;
         }
@@ -1447,7 +1437,7 @@ impl Application for App {
             .button_spacing(space_xxxs)
             .on_activate(|entity| action::cosmic(cosmic::app::Action::NavBar(entity)))
             .spacing(space_none)
-            .style(theme::SegmentedButton::TabBar)
+            .style(theme::SegmentedButton::FileNav)
             .apply(widget::container)
             .padding(space_s)
             .width(Length::Shrink);
@@ -1546,7 +1536,7 @@ impl Application for App {
         }
     }
 
-    fn dialog(&self) -> Option<Element<Self::Message>> {
+    fn dialog(&self) -> Option<Element<'_, Self::Message>> {
         let Some(ref dialog) = self.dialog_page_opt else {
             return None;
         };
@@ -2088,8 +2078,7 @@ impl Application for App {
             Message::OpenFileDialog => {
                 if self.dialog_opt.is_none() {
                     let (dialog, command) = Dialog::new(
-                        DialogKind::OpenMultipleFiles,
-                        None,
+                        DialogSettings::new().kind(DialogKind::OpenMultipleFiles),
                         Message::DialogMessage,
                         Message::OpenFileResult,
                     );
@@ -2147,7 +2136,8 @@ impl Application for App {
                     },
                     relative_path.display()
                 );
-                let icon = icon::icon(mime_icon(mime_for_path(&diff.path), 16)).size(16);
+                let icon =
+                    icon::icon(mime_icon(mime_for_path(&diff.path, None, false), 16)).size(16);
                 let tab = Tab::GitDiff(GitDiffTab { title, diff });
                 self.tab_model
                     .insert()
@@ -2161,8 +2151,7 @@ impl Application for App {
             Message::OpenProjectDialog => {
                 if self.dialog_opt.is_none() {
                     let (dialog, command) = Dialog::new(
-                        DialogKind::OpenMultipleFolders,
-                        None,
+                        DialogSettings::new().kind(DialogKind::OpenMultipleFolders),
                         Message::DialogMessage,
                         Message::OpenProjectResult,
                     );
@@ -2387,12 +2376,15 @@ impl Application for App {
                             ),
                             None => (String::new(), None),
                         };
-                        let (dialog, command) = Dialog::new(
-                            DialogKind::SaveFile { filename },
-                            path_opt,
-                            Message::DialogMessage,
-                            move |result| Message::SaveAsResult(entity, result),
-                        );
+                        let mut settings =
+                            DialogSettings::new().kind(DialogKind::SaveFile { filename });
+                        if let Some(path) = path_opt {
+                            settings = settings.path(path);
+                        }
+                        let (dialog, command) =
+                            Dialog::new(settings, Message::DialogMessage, move |result| {
+                                Message::SaveAsResult(entity, result)
+                            });
                         self.dialog_opt = Some(dialog);
                         return command;
                     }
@@ -2443,6 +2435,11 @@ impl Application for App {
                         buffer.set_scroll(scroll);
                     });
                 }
+            }
+            Message::Surface(a) => {
+                return cosmic::task::message(cosmic::Action::Cosmic(
+                    cosmic::app::Action::Surface(a),
+                ));
             }
             Message::SystemThemeModeChange(_theme_mode) => {
                 return self.update_config();
@@ -2722,14 +2719,15 @@ impl Application for App {
         Task::none()
     }
 
-    fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<Message>> {
+    fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<'_, Message>> {
         if !self.core.window.show_context {
             return None;
         }
 
         Some(match self.context_page {
-            ContextPage::About => context_drawer::context_drawer(
-                self.about(),
+            ContextPage::About => context_drawer::about(
+                &self.about,
+                Message::LaunchUrl,
                 Message::ToggleContextPage(ContextPage::About),
             ),
             ContextPage::DocumentStatistics => context_drawer::context_drawer(
@@ -2755,8 +2753,9 @@ impl Application for App {
         })
     }
 
-    fn header_start(&self) -> Vec<Element<Message>> {
+    fn header_start(&self) -> Vec<Element<'_, Message>> {
         vec![menu_bar(
+            &self.core,
             &self.config,
             &self.config_state,
             &self.key_binds,
@@ -2764,7 +2763,7 @@ impl Application for App {
         )]
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         let cosmic_theme::Spacing {
             space_none,
             space_xxs,
@@ -3030,7 +3029,7 @@ impl Application for App {
         content
     }
 
-    fn view_window(&self, window_id: window::Id) -> Element<Message> {
+    fn view_window(&self, window_id: window::Id) -> Element<'_, Message> {
         match &self.dialog_opt {
             Some(dialog) => dialog.view(window_id),
             None => widget::text("Unknown window ID").into(),

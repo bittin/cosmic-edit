@@ -2,20 +2,17 @@
 name = "cosmic-edit"
 version = "0.1.0"
 authors = ["Jeremy Soller <jeremy@system76.com>"]
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0-only"
-rust-version = "1.71"
-
-[build-dependencies]
-vergen = { version = "8", features = ["git", "gitcl"] }
+rust-version = "1.85"
 
 [dependencies]
 dirs = "6"
-env_logger = "0.11.6"
+env_logger = "0.11.8"
 grep = "0.3.2"
 ignore = "0.4.23"
-log = "0.4.25"
-notify = "6.1.1"
+log = "0.4.28"
+notify = "8.2.0"
 open = "5.3.2"
 paste = "1.0.15"
 patch = "0.7.0"
@@ -26,10 +23,12 @@ tokio = { version = "1", features = ["process", "time"] }
 syntect = "5.2.0"
 two-face = "0.4.3"
 # Internationalization
-icu_collator = "1.5"
-icu_provider = { version = "1.5", features = ["sync"] }
-i18n-embed = { version = "0.15", features = ["fluent-system", "desktop-requester"] }
-i18n-embed-fl = "0.9"
+icu = { version = "2.0.0", features = ["compiled_data"] }
+i18n-embed = { version = "0.16", features = [
+    "fluent-system",
+    "desktop-requester",
+] }
+i18n-embed-fl = "0.10"
 rust-embed = "8"
 
 [dependencies.cosmic-files]
@@ -46,14 +45,18 @@ features = ["syntect", "vi"]
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
 default-features = false
-features = ["a11y", "multi-window", "tokio", "winit"]
+#TODO: a11y feature crashes file choser dialog
+features = ["about", "multi-window", "tokio", "winit", "surface-message"]
 
 [target.'cfg(unix)'.dependencies]
 fork = "0.2"
 
 [features]
-default = ["wgpu"]
+default = ["dbus-config","gvfs", "wgpu", "wayland"]
+dbus-config = ["libcosmic/dbus-config"]
+gvfs = ["cosmic-files/gvfs"]
 wgpu = ["libcosmic/wgpu", "cosmic-files/wgpu"]
+wayland = ["libcosmic/wayland", "cosmic-files/wayland"]
 
 [profile.release-with-debug]
 inherits = "release"
@@ -62,6 +65,7 @@ debug = true
 [patch.crates-io]
 onig = { git = "https://github.com/rust-onig/rust-onig.git", branch = "main" }
 onig_sys = { git = "https://github.com/rust-onig/rust-onig.git", branch = "main" }
+license = { git = "https://github.com/evenorog/license.git" }
 
 # [patch.'https://github.com/pop-os/libcosmic']
 # libcosmic = { path = "../libcosmic" }
