@@ -26,7 +26,7 @@ default-font-size = Výchozí velikost písma
 ### Keyboard shortcuts
 
 keyboard-shortcuts = Klávesové zkratky
-enable-vim-bindings = Povolit režim Vim
+enable-vim-bindings = Povolit Vim zkratky
 
 # Menu
 
@@ -37,7 +37,6 @@ file = Soubor
 new-file = Nový soubor
 new-window = Nové okno
 open-file = Otevřít soubor...
-open-recent = Otevřít nedávný
 todo = TODO
 save = Uložit
 save-as = Uložit jako...
@@ -50,7 +49,7 @@ quit = Ukončit
 
 ## Edit
 
-edit = Upravit
+edit = Úpravy
 undo = Vrátit
 redo = Opakovat
 cut = Vyjmout
@@ -62,7 +61,7 @@ spell-check = Kontrola pravopisu...
 
 ## View
 
-view = Zobrazit
+view = Zobrazení
 indentation = Odsazení
 
 ### Indentation
@@ -83,13 +82,13 @@ repository = Repozitář
 support = Podpora
 git-management = Správa Git
 git-management-description = Správa Git je vývojářský nástroj používaný pro operace verzování.
-prompt-save-changes-title = Neuložené změny
-prompt-unsaved-changes = Máte neuložené změny. Uložit?
+prompt-save-changes-title = Uložit změny před zavřením?
+prompt-unsaved-changes = Máte neuložené změny. Pokud je nyní neuložíte, přijdete o ně.
 cancel = Zrušit
 discard = Zahodit změny
 save-all = Uložit vše
-dark = Tmavý
-light = Světlý
+dark = Tmavé
+light = Světlé
 default-zoom-step = Kroky přiblížení
 find-placeholder = Najít...
 find-previous = Najít předchozí
@@ -108,12 +107,12 @@ find-in-project = Najít v projektu...
 zoom-in = Přiblížit
 default-size = Výchozí velikost
 zoom-out = Oddálit
-match-desktop = Dle systému
+match-desktop = Podle systému
 git-management-loading = Načítání správy Git...
-unstage = Odebrat z přípravy
-staged-changes = Připravené změny
-stage = Připravit
-unstaged-changes = Nepřipravené změny
+unstage = Odebrat ze stage
+staged-changes = Změny ve stage
+stage = Přidat do stage
+unstaged-changes = Změny mimo stage
 project-search = Vyhledávání v projektu
 case-sensitive = Rozlišovat velikost písmen
 wrap-around = Pokračovat od začátku

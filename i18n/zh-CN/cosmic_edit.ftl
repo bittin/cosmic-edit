@@ -8,7 +8,6 @@ todo = 待办事项
 
 ## About
 
-git-description = Git 提交 { $hash } 于 { $date }
 
 ## Document statistics
 
@@ -49,9 +48,9 @@ settings = 设置
 appearance = 外观
 theme = 主题
 match-desktop = 匹配桌面
-dark = 深色
-light = 亮色
-syntax-dark = 深色语法
+dark = 暗色模式
+light = 亮色模式
+syntax-dark = 暗色语法
 syntax-light = 亮色语法
 default-font = 默认字体
 default-font-size = 默认字体大小

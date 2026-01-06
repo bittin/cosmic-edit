@@ -1,23 +1,26 @@
 cosmic-text-editor = Eagarthóir Téacs COSMIC
 new-document = Doiciméad nua
-open-project = Tionscadal oscailte
+open-project = Oscail tionscadal
 todo = LE DÉANAMH
 
 # Context Pages
 
+
 ## About
-git-description = Git tiomantas {$hash} ar {$date}
+
 
 ## Document statistics
+
 document-statistics = Staitisticí Doiciméad
-word-count = Comhaireamh focal
+word-count = Líon focal
 character-count = Carachtair
 character-count-no-spaces = Carachtair (gan spásanna)
-line-count = Comhaireamh línte
+line-count = Línte
 
 ## Git management
+
 git-management = Bainistíocht Git
-git-management-description = Is uirlis do fhorbróirí é Bainistíocht Git, a úsáidtear le haghaidh oibríochtaí rialaithe leagan.
+git-management-description = Is uirlis do fhorbróirí é bainistíocht Git, a úsáidtear le haghaidh oibríochtaí rialaithe leagan.
 git-management-loading = Bainistíocht Git a luchtú...
 stage = Céim
 staged-changes = Athruithe faoi chéim
@@ -25,47 +28,53 @@ unstage = Céim a bhaint
 unstaged-changes = Athruithe neamhchéime
 
 ## Project search
+
 project-search = Cuardach tionscadail
 
 ## Prompt save changes
-prompt-save-changes-title = Athruithe neamhshábháilte
-prompt-unsaved-changes = Tá athruithe neamhshábháilte agat. Sábháil?
+
+prompt-save-changes-title = Sábháil na hathruithe roimh dhúnadh?
+prompt-unsaved-changes = Tá athruithe neamhshábháilte agat. Má leanann tú ar aghaidh gan iad a shábháil, caillfear na hathruithe seo.
 cancel = Cealaigh
 discard = Athruithe a scriosadh
 save-all = Sábháil gach rud
 
 ## Settings
+
 settings = Socruithe
 
 ### Appearance
-appearance = Dealramh
+
+appearance = Cuma
 theme = Téama
-match-desktop = Meaitseáil le deasc
+match-desktop = Meaitseáil deasc
 dark = Dorcha
 light = Solas
-syntax-dark = Comhréir Dorcha
-syntax-light = Solas comhréir
+syntax-dark = Comhréir dorcha
+syntax-light = Comhréir solas
 default-font = Cló réamhshocraithe
 default-font-size = Méid cló réamhshocraithe
 
 ### Keyboard shortcuts
-keyboard-shortcuts = Aicearraí méarchláir
-enable-vim-bindings = Cumasaigh Ceangail Vim
 
+keyboard-shortcuts = Aicearraí méarchláir
+enable-vim-bindings = Cumasaigh ceangailteacha Vim
 # Find
-find-placeholder = Faigh...
-find-previous = Faigh an roimhe seo
-find-next = Faigh an chéad cheann eile
-replace-placeholder = Ionadaigh...
-replace = Cuir in ionad
-replace-all = Cuir gach ceann in ionad
-case-sensitive = Íogaireacht cháis
-use-regex = Úsáid Regex
-wrap-around = Timpeallacht
+find-placeholder = Aimsigh...
+find-previous = Aimsigh an ceann roimhe seo
+find-next = Aimsigh an ceann eile
+replace-placeholder = Cuir in ionad...
+replace = Ionadaigh
+replace-all = Cuir gach rud in ionad
+case-sensitive = Cás-íogair
+use-regex = Úsáid regex
+wrap-around = Timfhill timpeall
 
 # Menu
 
+
 ## File
+
 file = Comhad
 new-file = Comhad nua
 new-window = Fuinneog nua
@@ -86,31 +95,39 @@ print = Priontáil
 quit = Scoir
 
 ## Edit
-edit = Cuir in eagar
-undo = Fill
+
+edit = Eagar
+undo = Cuir ar ceal
 redo = Déan arís
 cut = Gearr
-copy = Cóip
+copy = Cóipeáil
 paste = Greamaigh
-select-all = Roghnaigh gach rud
-find = Faigh
-find-in-project = Faigh i dTionscadal...
+select-all = Roghnaigh gach ceann
+find = Aimsigh
+find-in-project = Aimsigh sa tionscadal...
 spell-check = Seiceáil litrithe...
 
 ## View
+
 view = Amharc
-indentation = Cuir eangach
+indentation = Eangú
 
 ### Indentation
-automatic-indentation = Eangach uathoibríoch
-tab-width = Leithead táb: {$tab_width}
-convert-indentation-to-spaces = Tiontú eangach go spásanna
-convert-indentation-to-tabs = Tiontú eangach go cluaisíní
 
-word-wrap = Cumhdach focal
+automatic-indentation = Eangú uathoibríoch
+tab-width = Leithead táb: { $tab_width }
+convert-indentation-to-spaces = Tiontaigh eangú go spásanna
+convert-indentation-to-tabs = Tiontaigh eangú go tábanna
+word-wrap = Timfhill focal
 show-line-numbers = Taispeáin uimhreacha líne
 highlight-current-line = Aibhsigh an líne reatha
 syntax-highlighting = Comhréir ag aibhsiú...
 menu-settings = Socruithe...
 menu-keyboard-shortcuts = Aicearraí méarchláir...
 menu-about = Maidir le Eagarthóir Téacs COSMIC...
+repository = Stór
+support = Tacaíocht
+default-zoom-step = Céimeanna súmála
+zoom-in = Súmáil isteach
+default-size = Méid réamhshocraithe
+zoom-out = Súmáil amach

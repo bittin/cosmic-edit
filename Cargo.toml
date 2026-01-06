@@ -24,6 +24,7 @@ syntect = "5.2.0"
 two-face = "0.4.3"
 # Internationalization
 icu = { version = "2.0.0", features = ["compiled_data"] }
+unicode-segmentation = "1.12"
 i18n-embed = { version = "0.16", features = [
     "fluent-system",
     "desktop-requester",
@@ -52,7 +53,7 @@ features = ["about", "multi-window", "tokio", "winit", "surface-message"]
 fork = "0.2"
 
 [features]
-default = ["dbus-config","gvfs", "wgpu", "wayland"]
+default = ["dbus-config", "gvfs", "wgpu", "wayland"]
 dbus-config = ["libcosmic/dbus-config"]
 gvfs = ["cosmic-files/gvfs"]
 wgpu = ["libcosmic/wgpu", "cosmic-files/wgpu"]
@@ -65,7 +66,6 @@ debug = true
 [patch.crates-io]
 onig = { git = "https://github.com/rust-onig/rust-onig.git", branch = "main" }
 onig_sys = { git = "https://github.com/rust-onig/rust-onig.git", branch = "main" }
-license = { git = "https://github.com/evenorog/license.git" }
 
 # [patch.'https://github.com/pop-os/libcosmic']
 # libcosmic = { path = "../libcosmic" }

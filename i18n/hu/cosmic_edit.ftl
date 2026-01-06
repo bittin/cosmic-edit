@@ -8,7 +8,6 @@ todo = Teendők
 
 ## About
 
-git-description = Git commit { $hash } ekkor: { $date }
 
 ## Document statistics
 
@@ -34,9 +33,9 @@ project-search = Projektkereső
 
 ## Prompt save changes
 
-prompt-save-changes-title = Nem mentett változtatások
-prompt-unsaved-changes = Nem minden változtatás van elmentve. Mentés?
-cancel = Megszakítás
+prompt-save-changes-title = Mented a változtatásokat bezárás előtt?
+prompt-unsaved-changes = Vannak nem mentett változtatások. Ha nem mentesz, ezek el fognak veszni.
+cancel = Mégse
 discard = Változtatások elvetése
 save-all = Összes mentése
 
@@ -59,7 +58,7 @@ default-zoom-step = Nagyítási mérték
 
 ### Keyboard shortcuts
 
-keyboard-shortcuts = Billentyűparancsok
+keyboard-shortcuts = Gyorsbillentyűk
 enable-vim-bindings = Vim billentyűkombinációk engedélyezése
 # Find
 find-placeholder = Keresés...
@@ -68,7 +67,7 @@ find-next = Következő találat
 replace-placeholder = Csere...
 replace = Csere
 replace-all = Összes lecserélése
-case-sensitive = Kisbetű-nagybetű érzékenység
+case-sensitive = Kis- és nagybetű érzékenység
 use-regex = Regex használata
 wrap-around = Körbefutás
 
@@ -128,7 +127,7 @@ show-line-numbers = Sorszámok megjelenítése
 highlight-current-line = Aktuális sor kiemelése
 syntax-highlighting = Szintaxiskiemelés...
 menu-settings = Beállítások...
-menu-keyboard-shortcuts = Billentyűparancsok...
+menu-keyboard-shortcuts = Gyorsbillentyűk...
 menu-about = A COSMIC Szövegszerkesztő névjegye...
 repository = Tároló
 support = Támogatás

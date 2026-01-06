@@ -5,18 +5,19 @@ use cosmic::{
     cosmic_theme::palette::{WithAlpha, blend::Compose},
     iced::{
         Color, Element, Length, Padding, Point, Rectangle, Size, Vector,
-        advanced::graphics::text::font_system,
+        advanced::graphics::text::{Raw, font_system},
         event::{Event, Status},
         keyboard::{Event as KeyEvent, Modifiers},
         mouse::{self, Button, Event as MouseEvent, ScrollDelta},
     },
     iced_core::{
-        Border, Radians, Shell,
+        Border, Radians, Shell, Transformation,
         clipboard::Clipboard,
         image,
         keyboard::{Key, key::Named},
         layout::{self, Layout},
         renderer::{self, Quad, Renderer as _},
+        text::Renderer as _,
         widget::{
             self, Id, Widget,
             operation::{self, Operation},
@@ -26,12 +27,13 @@ use cosmic::{
     theme::Theme,
 };
 use cosmic_text::{
-    Action, BorrowedWithFontSystem, Edit, Metrics, Motion, Scroll, Selection, ViEditor,
+    Action, BorrowedWithFontSystem, Cursor, Edit, Metrics, Motion, Renderer as _, Scroll,
+    Selection, ViEditor,
 };
 use std::{
     cell::Cell,
     cmp,
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -44,6 +46,7 @@ pub struct TextBox<'a, Message> {
     padding: Padding,
     on_auto_scroll: Option<Box<dyn Fn(Option<f32>) -> Message + 'a>>,
     on_changed: Option<Message>,
+    on_focus: Option<Message>,
     click_timing: Duration,
     has_context_menu: bool,
     on_context_menu: Option<Box<dyn Fn(Option<Point>) -> Message + 'a>>,
@@ -63,6 +66,7 @@ where
             padding: Padding::new(0.0),
             on_auto_scroll: None,
             on_changed: None,
+            on_focus: None,
             click_timing: Duration::from_millis(500),
             has_context_menu: false,
             on_context_menu: None,
@@ -118,6 +122,11 @@ where
         self.line_numbers = true;
         self
     }
+
+    pub fn on_focus(mut self, on_focus: Message) -> Self {
+        self.on_focus = Some(on_focus);
+        self
+    }
 }
 
 pub fn text_box<'a, Message>(
@@ -130,11 +139,13 @@ where
     TextBox::new(editor, metrics)
 }
 
+#[derive(Clone, Copy)]
 struct Canvas {
     w: i32,
     h: i32,
 }
 
+#[derive(Clone, Copy)]
 struct Offset {
     x: i32,
     y: i32,
@@ -221,6 +232,30 @@ fn draw_rect(
     }
 }
 
+struct CustomRenderer<'a> {
+    renderer: &'a mut Renderer,
+    pos: Point,
+}
+
+impl<'a> cosmic_text::Renderer for CustomRenderer<'a> {
+    fn rectangle(&mut self, x: i32, y: i32, w: u32, h: u32, color: cosmic_text::Color) {
+        self.renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(
+                    self.pos + Vector::new(x as f32, y as f32),
+                    Size::new(w as f32, h as f32),
+                ),
+                ..Default::default()
+            },
+            Color::from_rgba8(color.r(), color.g(), color.b(), (color.a() as f32) / 255.0),
+        );
+    }
+
+    fn glyph(&mut self, _physical_glyph: cosmic_text::PhysicalGlyph, _color: cosmic_text::Color) {
+        // Glyphs will be drawn by iced fill_raw for performance
+    }
+}
+
 impl<'a, Message> Widget<Message, cosmic::Theme, Renderer> for TextBox<'a, Message>
 where
     Message: Clone,
@@ -289,7 +324,7 @@ where
     ) -> mouse::Interaction {
         let state = tree.state.downcast_ref::<State>();
 
-        if let Some(Dragging::ScrollbarV { .. }) = &state.dragging {
+        if let Some(Dragging::ScrollbarV { .. } | Dragging::ScrollbarH { .. }) = &state.dragging {
             return mouse::Interaction::Idle;
         }
 
@@ -332,11 +367,12 @@ where
         let mut editor = self.editor.lock().unwrap();
 
         let cosmic_theme = theme.cosmic();
-        let scrollbar_w = cosmic_theme.spacing.space_xxs as i32;
+        let scrollbar_size = cosmic_theme.spacing.space_xxs as i32;
 
+        let view_position = layout.position() + [self.padding.left, self.padding.top].into();
         let view_w = cmp::min(viewport.width as i32, layout.bounds().width as i32)
             - self.padding.horizontal() as i32
-            - scrollbar_w;
+            - scrollbar_size;
         let view_h = cmp::min(viewport.height as i32, layout.bounds().height as i32)
             - self.padding.vertical() as i32;
 
@@ -363,8 +399,8 @@ where
             (image, scaled)
         };
 
-        let (image_w, scaled_w) = calculate_ideal(view_w);
-        let (image_h, scaled_h) = calculate_ideal(view_h);
+        let (image_w, _scaled_w) = calculate_ideal(view_w);
+        let (image_h, _scaled_h) = calculate_ideal(view_h);
 
         if image_w <= 0 || image_h <= 0 {
             // Zero sized image
@@ -430,9 +466,13 @@ where
         editor.shape_as_needed(font_system.raw(), true);
 
         let mut handle_opt = state.handle_opt.lock().unwrap();
+        let image_canvas = Canvas {
+            w: editor_offset_x,
+            h: image_h,
+        };
         if editor.redraw() || handle_opt.is_none() {
             // Draw to pixel buffer
-            let mut pixels_u8 = vec![0; image_w as usize * image_h as usize * 4];
+            let mut pixels_u8 = vec![0; image_canvas.w as usize * image_canvas.h as usize * 4];
             {
                 let mut swash_cache = SWASH_CACHE.get().unwrap().lock().unwrap();
 
@@ -443,6 +483,7 @@ where
                     )
                 };
 
+                //TODO: draw line numbers using iced functions for performance
                 if self.line_numbers {
                     let (gutter, gutter_foreground) = {
                         let convert_color = |color: syntect::highlighting::Color| {
@@ -463,10 +504,7 @@ where
                     // Ensure fill with gutter color
                     draw_rect(
                         pixels,
-                        Canvas {
-                            w: image_w,
-                            h: image_h,
-                        },
+                        image_canvas,
                         Canvas {
                             w: editor_offset_x,
                             h: image_h,
@@ -520,10 +558,7 @@ where
                                         |x, y, color| {
                                             draw_rect(
                                                 pixels,
-                                                Canvas {
-                                                    w: image_w,
-                                                    h: image_h,
-                                                },
+                                                image_canvas,
                                                 Canvas { w: 1, h: 1 },
                                                 Offset {
                                                     x: physical_glyph.x + x,
@@ -538,71 +573,6 @@ where
                         }
                     });
                 }
-
-                if self.highlight_current_line {
-                    let line_highlight = {
-                        let convert_color = |color: syntect::highlighting::Color| {
-                            cosmic_text::Color::rgba(color.r, color.g, color.b, color.a)
-                        };
-                        let syntax_theme = editor.theme();
-                        //TODO: ideal fallback for line highlight color
-                        syntax_theme
-                            .settings
-                            .line_highlight
-                            .map_or(editor.background_color(), convert_color)
-                    };
-
-                    let cursor = editor.cursor();
-                    editor.with_buffer(|buffer| {
-                        for run in buffer.layout_runs() {
-                            if run.line_i != cursor.line {
-                                continue;
-                            }
-
-                            draw_rect(
-                                pixels,
-                                Canvas {
-                                    w: image_w,
-                                    h: image_h,
-                                },
-                                Canvas {
-                                    w: image_w - editor_offset_x,
-                                    h: metrics.line_height as i32,
-                                },
-                                Offset {
-                                    x: editor_offset_x,
-                                    y: run.line_top as i32,
-                                },
-                                line_highlight,
-                            );
-                        }
-                    });
-                }
-
-                // Draw editor
-                let scroll_x = editor.with_buffer(|buffer| buffer.scroll().horizontal as i32);
-                editor.draw(font_system.raw(), &mut swash_cache, |x, y, w, h, color| {
-                    if x < scroll_x {
-                        //TODO: modify width?
-                        return;
-                    }
-                    draw_rect(
-                        pixels,
-                        Canvas {
-                            w: image_w,
-                            h: image_h,
-                        },
-                        Canvas {
-                            w: w as i32,
-                            h: h as i32,
-                        },
-                        Offset {
-                            x: editor_offset_x + x - scroll_x,
-                            y,
-                        },
-                        color,
-                    );
-                });
 
                 // Calculate scrollbar
                 editor.with_buffer(|buffer| {
@@ -627,7 +597,7 @@ where
                     let rect = Rectangle::new(
                         [image_w as f32 / scale_factor, start_y as f32 / scale_factor].into(),
                         Size::new(
-                            scrollbar_w as f32,
+                            scrollbar_size as f32,
                             (end_y as f32 - start_y as f32) / scale_factor,
                         ),
                     );
@@ -636,17 +606,17 @@ where
                     let (buffer_w_opt, buffer_h_opt) = buffer.size();
                     let buffer_w = buffer_w_opt.unwrap_or(0.0);
                     let buffer_h = buffer_h_opt.unwrap_or(0.0);
-                    let scrollbar_h_width = image_w as f32 / scale_factor - scrollbar_w as f32;
+                    let scrollbar_h_width = (image_w as f32) / scale_factor;
                     if buffer_w < max_line_width {
                         let rect = Rectangle::new(
                             [
                                 (buffer.scroll().horizontal / max_line_width) * scrollbar_h_width,
-                                buffer_h / scale_factor - scrollbar_w as f32,
+                                buffer_h / scale_factor - scrollbar_size as f32,
                             ]
                             .into(),
                             Size::new(
                                 (buffer_w / max_line_width) * scrollbar_h_width,
-                                scrollbar_w as f32,
+                                scrollbar_size as f32,
                             ),
                         );
                         state.scrollbar_h_rect.set(Some(rect));
@@ -661,32 +631,96 @@ where
 
             state.scale_factor.set(scale_factor);
             *handle_opt = Some(image::Handle::from_rgba(
-                image_w as u32,
-                image_h as u32,
+                image_canvas.w as u32,
+                image_canvas.h as u32,
                 pixels_u8,
             ));
         }
 
+        // Draw cached image
         let image_position = layout.position() + [self.padding.left, self.padding.top].into();
-        if let Some(ref handle) = *handle_opt {
-            let image_size = image::Renderer::measure_image(renderer, handle);
-            let scaled_size = Size::new(scaled_w as f32, scaled_h as f32);
-            log::debug!(
-                "text_box image {:?} scaled {:?} position {:?}",
-                image_size,
-                scaled_size,
-                image_position
-            );
-            image::Renderer::draw_image(
-                renderer,
-                handle.clone(),
-                image::FilterMethod::Nearest,
-                Rectangle::new(image_position, scaled_size),
-                Radians(0.0),
-                1.0,
-                [0.0; 4],
-            );
-        }
+
+        // Draw editor UI
+        renderer.with_translation(Vector::new(view_position.x, view_position.y), |renderer| {
+            renderer.with_transformation(Transformation::scale(1.0 / scale_factor), |renderer| {
+                // Draw cached image (only has line numbers)
+                if let Some(ref handle) = *handle_opt {
+                    let image_size = image::Renderer::measure_image(renderer, handle);
+                    image::Renderer::draw_image(
+                        renderer,
+                        handle.clone(),
+                        image::FilterMethod::Nearest,
+                        Rectangle::new(
+                            Point::new(0.0, 0.0),
+                            Size::new(image_size.width as f32, image_size.height as f32),
+                        ),
+                        Radians(0.0),
+                        1.0,
+                        [0.0; 4],
+                    );
+                }
+
+                // Calculate editor position
+                let scroll_x = editor.with_buffer(|buffer| buffer.scroll().horizontal);
+                let pos = Point::new(editor_offset_x as f32 - scroll_x, 0.0);
+                let size = Size::new((image_w - editor_offset_x) as f32, image_h as f32);
+                let clip_bounds = Rectangle::new(Point::new(editor_offset_x as f32, 0.0), size);
+                renderer.with_layer(clip_bounds, |renderer| {
+                    // Create custom renderer for rectangles
+                    let mut custom_renderer = CustomRenderer { renderer, pos };
+
+                    // Draw line highlight
+                    if self.highlight_current_line {
+                        let line_highlight = {
+                            let convert_color = |color: syntect::highlighting::Color| {
+                                cosmic_text::Color::rgba(color.r, color.g, color.b, color.a)
+                            };
+                            let syntax_theme = editor.theme();
+                            //TODO: ideal fallback for line highlight color
+                            syntax_theme
+                                .settings
+                                .line_highlight
+                                .map_or(editor.background_color(), convert_color)
+                        };
+
+                        let cursor = editor.cursor();
+                        editor.with_buffer(|buffer| {
+                            for run in buffer.layout_runs() {
+                                if run.line_i != cursor.line {
+                                    continue;
+                                }
+
+                                custom_renderer.rectangle(
+                                    0,
+                                    run.line_top as i32,
+                                    (image_w - editor_offset_x) as u32,
+                                    metrics.line_height as u32,
+                                    line_highlight,
+                                );
+                            }
+                        });
+                    }
+
+                    // Draw editor selection, cursor, etc.
+                    editor.render(&mut custom_renderer);
+
+                    // Draw editor text
+                    match editor.buffer_ref() {
+                        cosmic_text::BufferRef::Arc(buffer) => {
+                            renderer.fill_raw(Raw {
+                                buffer: Arc::downgrade(&buffer),
+                                position: pos,
+                                color: Color::new(1.0, 1.0, 1.0, 1.0),
+                                clip_bounds,
+                            });
+                        }
+                        _ => {
+                            log::error!("cosmic-text buffer not an Arc");
+                        }
+                    }
+                })
+            })
+        });
 
         // Draw vertical scrollbar
         {
@@ -780,7 +814,7 @@ where
         // Draw horizontal scrollbar
         //TODO: reduce repitition
         if let Some(scrollbar_h_rect) = state.scrollbar_h_rect.get() {
-            /*TODO: horizontal scrollbar track?
+            /*
             // neutral_3, 0.7
             let track_color = cosmic_theme
                 .palette
@@ -792,9 +826,12 @@ where
             renderer.fill_quad(
                 Quad {
                     bounds: Rectangle::new(
-                        Point::new(image_position.x, image_position.y + scrollbar_h_rect.y),
+                        Point::new(
+                            image_position.x + scrollbar_h_rect.x,
+                            image_position.y + scrollbar_h_rect.y,
+                        ),
                         Size::new(
-                            layout.bounds().width - scrollbar_w as f32,
+                            layout.bounds().width - scrollbar_h_rect.x - scrollbar_size as f32,
                             scrollbar_h_rect.height,
                         ),
                     ),
@@ -871,7 +908,7 @@ where
         }
 
         let duration = instant.elapsed();
-        log::debug!("redraw {}, {}: {:?}", view_w, view_h, duration);
+        log::trace!("redraw {}, {}: {:?}", view_w, view_h, duration);
     }
 
     fn on_event(
@@ -946,6 +983,13 @@ where
                 editor.set_selection(Selection::Normal(cursor));
                 editor.action(Action::Motion(motion_to_apply));
             }
+        }
+
+        if let Some(on_focus) = self.on_focus.as_ref()
+            && state.emit_focus
+        {
+            state.emit_focus = false;
+            shell.publish(on_focus.clone());
         }
 
         let mut status = Status::Ignored;
@@ -1028,11 +1072,21 @@ where
                 }
             }
             Event::Keyboard(KeyEvent::ModifiersChanged(modifiers)) => {
+                if modifiers.shift() && !state.modifiers.shift() {
+                    let anchor = editor.cursor();
+                    *state.shift_anchor.lock().unwrap() = Some(anchor);
+                } else if !modifiers.shift() && state.modifiers.shift() {
+                    *state.shift_anchor.lock().unwrap() = None;
+                }
                 state.modifiers = modifiers;
             }
             Event::Mouse(MouseEvent::ButtonPressed(button)) => {
                 if let Some(p) = cursor_position.position_in(layout.bounds()) {
                     state.is_focused = true;
+
+                    if let Some(on_focus) = self.on_focus.as_ref() {
+                        shell.publish(on_focus.clone());
+                    }
 
                     // Handle left click drag
                     if let Button::Left = button {
@@ -1044,7 +1098,10 @@ where
                         // Do this first as the horizontal scrollbar is on top of the buffer
                         if let Some(scrollbar_h_rect) = state.scrollbar_h_rect.get() {
                             if scrollbar_h_rect.contains(Point::new(x_logical, y_logical)) {
-                                state.dragging = Some(Dragging::ScrollbarH { start_x: x });
+                                state.dragging = Some(Dragging::ScrollbarH {
+                                    start_x: x,
+                                    start_scroll: editor.with_buffer(|buffer| buffer.scroll()),
+                                });
                             }
                         }
 
@@ -1071,6 +1128,16 @@ where
                                 } else {
                                     ClickKind::Single
                                 };
+                            let maybe_anchor = if state.modifiers.shift() {
+                                state.shift_anchor.lock().unwrap().clone()
+                            } else {
+                                None
+                            };
+
+                            if let Some(anchor) = maybe_anchor {
+                                editor.set_selection(Selection::Normal(anchor));
+                            }
+
                             match click_kind {
                                 ClickKind::Single => editor.action(Action::Click {
                                     x: x as i32,
@@ -1084,6 +1151,10 @@ where
                                     x: x as i32,
                                     y: y as i32,
                                 }),
+                            }
+
+                            if let Some(anchor) = maybe_anchor {
+                                editor.set_selection(Selection::Normal(anchor));
                             }
                             state.click = Some((click_kind, Instant::now()));
                             state.dragging = Some(Dragging::Buffer);
@@ -1181,7 +1252,10 @@ where
                                     buffer.set_scroll(scroll);
                                 });
                             }
-                            Dragging::ScrollbarH { start_x } => {
+                            Dragging::ScrollbarH {
+                                start_x,
+                                start_scroll,
+                            } => {
                                 editor.with_buffer_mut(|buffer| {
                                     //TODO: store this in state?
                                     let mut max_line_width = 0.0;
@@ -1193,10 +1267,10 @@ where
 
                                     let buffer_w = buffer.size().0.unwrap_or(0.0);
                                     let mut scroll = buffer.scroll();
-                                    scroll.horizontal = (((x - start_x) / buffer_w)
-                                        * max_line_width)
-                                        .max(0.0)
-                                        .min(max_line_width - buffer_w);
+                                    let scroll_offset = ((x - start_x) / buffer_w) * max_line_width;
+                                    scroll.horizontal = (start_scroll.horizontal + scroll_offset)
+                                        .min(max_line_width - buffer_w)
+                                        .max(0.0);
                                     buffer.set_scroll(scroll);
                                 });
                             }
@@ -1207,15 +1281,33 @@ where
             }
             Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
                 if let Some(_p) = cursor_position.position_in(layout.bounds()) {
-                    let pixels = match delta {
-                        ScrollDelta::Lines { x: _, y } => {
+                    let (mut x, mut y) = match delta {
+                        ScrollDelta::Lines { x, y } => {
                             //TODO: this adjustment is just a guess!
                             let metrics = editor.with_buffer(|buffer| buffer.metrics());
-                            -y * metrics.line_height
+                            (-x * metrics.line_height, -y * metrics.line_height)
                         }
-                        ScrollDelta::Pixels { x: _, y } => -y,
-                    } * 4.0;
-                    editor.action(Action::Scroll { pixels });
+                        ScrollDelta::Pixels { x, y } => (-x, -y),
+                    };
+                    x *= 4.0;
+                    y *= 4.0;
+                    editor.action(Action::Scroll { pixels: y });
+                    editor.with_buffer_mut(|buffer| {
+                        //TODO: store this in state?
+                        let mut max_line_width = 0.0;
+                        for run in buffer.layout_runs() {
+                            if run.line_w > max_line_width {
+                                max_line_width = run.line_w;
+                            }
+                        }
+
+                        let buffer_w = buffer.size().0.unwrap_or(0.0);
+                        let mut scroll = buffer.scroll();
+                        scroll.horizontal = (scroll.horizontal + x)
+                            .min(max_line_width - buffer_w)
+                            .max(0.0);
+                        buffer.set_scroll(scroll);
+                    });
                     status = Status::Captured;
                 }
             }
@@ -1251,10 +1343,11 @@ enum ClickKind {
     Triple,
 }
 
+#[derive(Debug)]
 enum Dragging {
     Buffer,
     ScrollbarV { start_y: f32, start_scroll: Scroll },
-    ScrollbarH { start_x: f32 },
+    ScrollbarH { start_x: f32, start_scroll: Scroll },
 }
 
 pub struct State {
@@ -1263,10 +1356,12 @@ pub struct State {
     dragging: Option<Dragging>,
     editor_offset_x: Cell<i32>,
     is_focused: bool,
+    emit_focus: bool,
     scale_factor: Cell<f32>,
     scrollbar_v_rect: Cell<Rectangle<f32>>,
     scrollbar_h_rect: Cell<Option<Rectangle<f32>>>,
     handle_opt: Mutex<Option<image::Handle>>,
+    shift_anchor: Mutex<Option<Cursor>>,
 }
 
 impl State {
@@ -1278,10 +1373,12 @@ impl State {
             dragging: None,
             editor_offset_x: Cell::new(0),
             is_focused: false,
+            emit_focus: false,
             scale_factor: Cell::new(1.0),
             scrollbar_v_rect: Cell::new(Rectangle::default()),
             scrollbar_h_rect: Cell::new(None),
             handle_opt: Mutex::new(None),
+            shift_anchor: Mutex::new(None),
         }
     }
 }
@@ -1293,6 +1390,7 @@ impl operation::Focusable for State {
 
     fn focus(&mut self) {
         self.is_focused = true;
+        self.emit_focus = true;
     }
 
     fn unfocus(&mut self) {

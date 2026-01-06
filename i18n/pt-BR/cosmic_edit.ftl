@@ -1,4 +1,4 @@
-cosmic-text-editor = Editor de Texto
+cosmic-text-editor = Editor de Texto COSMIC
 new-document = Novo documento
 open-project = Abrir projeto
 todo = TODO
@@ -8,7 +8,6 @@ todo = TODO
 
 ## About
 
-git-description = Git commit { $hash } de { $date }
 
 ## Document statistics
 
@@ -21,12 +20,12 @@ line-count = Linhas
 ## Git management
 
 git-management = Gestor do Git
-git-management-description = O gestor do Git é uma ferramenta de desenvolvedor usada para operações de controle de versão.
-git-management-loading = Carregando o gestor do Git...
-stage = Adicionar em stage
-staged-changes = Alterações em stage
-unstage = Remover do stage
-unstaged-changes = Alterações fora do stage
+git-management-description = Git é uma ferramenta de desenvolvimento usada para operações de controle de versão.
+git-management-loading = Carregando o gerenciamento do Git...
+stage = Adicionar à área de preparação
+staged-changes = Alterações na área de preparação
+unstage = Remover da área de preparação
+unstaged-changes = Alterações fora da área de preparação
 
 ## Project search
 
@@ -51,8 +50,8 @@ theme = Tema
 match-desktop = Estilo do sistema
 dark = Estilo escuro
 light = Estilo claro
-syntax-dark = Esquema de cores escuro
-syntax-light = Esquema de cores claro
+syntax-dark = Sintaxe em tema escuro
+syntax-light = Sintaxe em tema claro
 default-font = Fonte padrão
 default-font-size = Tamanho padrão da fonte
 default-zoom-step = Etapas de zoom
@@ -70,7 +69,7 @@ replace = Substituir
 replace-all = Substituir tudo
 case-sensitive = Diferenciar maiúsculas de minúsculas
 use-regex = Usar expressão regular
-wrap-around = Envolver ao redor
+wrap-around = Voltar ao início
 
 # Menu
 
@@ -101,7 +100,7 @@ quit = Sair
 edit = Editar
 undo = Desfazer
 redo = Refazer
-cut = Cortar
+cut = Recortar
 copy = Copiar
 paste = Colar
 select-all = Selecionar tudo
@@ -112,9 +111,9 @@ spell-check = Verificação ortográfica...
 ## View
 
 view = Exibir
-zoom-in = Aumentar o zoom
+zoom-in = Ampliar
 default-size = Tamanho padrão
-zoom-out = Diminuir o zoom
+zoom-out = Reduzir
 indentation = Recuo de texto
 
 ### Indentation
@@ -129,6 +128,6 @@ highlight-current-line = Destacar linha atual
 syntax-highlighting = Destaque de sintaxe...
 menu-settings = Configurações...
 menu-keyboard-shortcuts = Atalhos do teclado...
-menu-about = Sobre o Editor de Texto
+menu-about = Sobre o Editor de Texto COSMIC...
 repository = Repositório
 support = Suporte

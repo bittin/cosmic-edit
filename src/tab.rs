@@ -6,17 +6,27 @@ use cosmic::{
 };
 use cosmic_files::mime_icon::{FALLBACK_MIME_ICON, mime_for_path, mime_icon};
 use cosmic_text::{Attrs, Buffer, Cursor, Edit, Selection, Shaping, SyntaxEditor, ViEditor, Wrap};
-use notify::Watcher;
 use regex::Regex;
 use std::{
     fs,
-    io::Write,
-    path::PathBuf,
+    io::{self, Write},
+    path::{self, PathBuf},
     process::{Command, Stdio},
     sync::{Arc, Mutex},
 };
 
 use crate::{Config, SYNTAX_SYSTEM, fl, git::GitDiff};
+
+fn editor_text(editor: &ViEditor<'static, 'static>) -> String {
+    editor.with_buffer(|buffer| {
+        let mut text = String::new();
+        for line in buffer.lines.iter() {
+            text.push_str(line.text());
+            text.push_str(line.ending().as_str());
+        }
+        text
+    })
+}
 
 pub enum Tab {
     Editor(EditorTab),
@@ -47,8 +57,7 @@ pub struct EditorTab {
 
 impl EditorTab {
     pub fn new(config: &Config) -> Self {
-        //TODO: do not repeat, used in App::init
-        let attrs = Attrs::new().family(cosmic_text::Family::Monospace);
+        let attrs = crate::monospace_attrs();
         let zoom_adj = Default::default();
         let mut buffer = Buffer::new_empty(config.metrics(zoom_adj));
         buffer.set_text(
@@ -102,20 +111,30 @@ impl EditorTab {
         let mut editor = self.editor.lock().unwrap();
         let mut font_system = font_system().write().unwrap();
         let mut editor = editor.borrow_with(font_system.raw());
-        match editor.load_text(&path, self.attrs.clone()) {
+        let absolute = match fs::canonicalize(&path) {
+            Ok(ok) => ok,
+            Err(err) => match path::absolute(&path) {
+                Ok(ok) => ok,
+                Err(_) => {
+                    log::error!("failed to canonicalize {:?}: {}", path, err);
+                    path
+                }
+            },
+        };
+        match editor.load_text(&absolute, self.attrs.clone()) {
             Ok(()) => {
-                log::info!("opened {:?}", path);
-                self.path_opt = match fs::canonicalize(&path) {
-                    Ok(ok) => Some(ok),
-                    Err(err) => {
-                        log::error!("failed to canonicalize {:?}: {}", path, err);
-                        Some(path)
-                    }
-                };
+                log::info!("opened {:?}", absolute);
+                self.path_opt = Some(absolute);
             }
             Err(err) => {
-                log::error!("failed to open {:?}: {}", path, err);
-                self.path_opt = None;
+                if err.kind() == io::ErrorKind::NotFound {
+                    log::warn!("opened non-existant file {:?}", absolute);
+                    self.path_opt = Some(absolute);
+                    editor.set_changed(true);
+                } else {
+                    log::error!("failed to open {:?}: {}", absolute, err);
+                    self.path_opt = None;
+                }
             }
         }
     }
@@ -132,6 +151,12 @@ impl EditorTab {
             match std::fs::read_to_string(path) {
                 Ok(file_content) => {
                     log::info!("reloaded {:?}", path);
+
+                    //TODO: compare using line iterator to prevent allocations
+                    if file_content == editor_text(&editor) {
+                        log::info!("text not changed");
+                        return;
+                    }
 
                     // Store the entire operation as a single change for undo
                     editor.start_change();
@@ -153,7 +178,30 @@ impl EditorTab {
                     // Replace everything in the buffer with the content from disk
                     editor.delete_range(cursor_start, cursor_end);
                     editor.insert_at(cursor_start, &file_content, None);
-                    editor.set_cursor(cursor_start);
+
+                    // Adjust cursor to closest position
+                    let mut cursor = editor.cursor();
+                    editor.with_buffer(|buffer| {
+                        cursor.line = cursor.line.min(buffer.lines.len().saturating_sub(1));
+                        cursor.index = if let Some(line) = buffer.lines.get(cursor.line) {
+                            let mut closest = line.text().len();
+                            for (i, _) in line.text().char_indices().rev() {
+                                if i >= cursor.index {
+                                    closest = i;
+                                } else {
+                                    // i < cursor.index
+                                    if cursor.index - i < closest - cursor.index {
+                                        closest = i;
+                                    }
+                                    break;
+                                }
+                            }
+                            closest
+                        } else {
+                            0
+                        }
+                    });
+                    editor.set_cursor(cursor);
 
                     editor.finish_change();
                     editor.set_changed(false);
@@ -173,15 +221,7 @@ impl EditorTab {
     pub fn save(&mut self) {
         if let Some(path) = &self.path_opt {
             let mut editor = self.editor.lock().unwrap();
-            let mut text = String::new();
-
-            editor.with_buffer(|buffer| {
-                for line in buffer.lines.iter() {
-                    text.push_str(line.text());
-                    text.push_str(line.ending().as_str());
-                }
-            });
-
+            let text = editor_text(&editor);
             match fs::write(path, &text) {
                 Ok(()) => {
                     editor.save_point();
@@ -235,21 +275,6 @@ impl EditorTab {
             }
         } else {
             log::warn!("tab has no path yet");
-        }
-    }
-
-    pub fn watch(&self, watcher_opt: &mut Option<notify::RecommendedWatcher>) {
-        if let Some(path) = &self.path_opt {
-            if let Some(watcher) = watcher_opt {
-                match watcher.watch(path, notify::RecursiveMode::NonRecursive) {
-                    Ok(()) => {
-                        log::info!("watching {:?} for changes", path);
-                    }
-                    Err(err) => {
-                        log::warn!("failed to watch {:?} for changes: {:?}", path, err);
-                    }
-                }
-            }
         }
     }
 
