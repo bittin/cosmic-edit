@@ -1,3 +1,4 @@
+comment = Textový editor pro prostředí COSMIC
 new-document = Nový dokument
 open-project = Otevřít projekt
 

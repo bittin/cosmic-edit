@@ -1,4 +1,5 @@
-cosmic-text-editor = Текстовый редактор COSMIC
+cosmic-text-editor = Текстовый редактор
+comment = Текстовый редактор для среды COSMIC
 new-document = Новый документ
 open-project = Открыть проект
 todo = TODO

@@ -1,3 +1,4 @@
+comment = Textredigerare för skrivbordsmiljön COSMIC
 new-document = Nytt dokument
 open-project = Öppna projekt
 todo = TODO
