@@ -455,7 +455,6 @@ where
         // Set metrics and size
         editor.with_buffer_mut(|buffer| {
             buffer.set_metrics_and_size(
-                font_system.raw(),
                 metrics,
                 Some((image_w - editor_offset_x) as f32),
                 Some(image_h as f32),
@@ -744,7 +743,6 @@ where
 
         // Draw vertical scrollbar
         if let Some(scrollbar_v_rect) = state.scrollbar_v_rect.get() {
-
             // neutral_3, 0.7
             let track_color = cosmic_theme
                 .palette
@@ -1226,7 +1224,9 @@ where
             }
             Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
                 state.dragging = None;
-                shell.capture_event();
+                if cursor_position.position_in(layout.bounds()).is_some() {
+                    shell.capture_event();
+                }
                 if let Some(on_auto_scroll) = &self.on_auto_scroll {
                     shell.publish(on_auto_scroll(None));
                 }
@@ -1412,8 +1412,10 @@ impl operation::Focusable for State {
     }
 
     fn focus(&mut self) {
+        if !self.is_focused {
+            self.emit_focus = true;
+        }
         self.is_focused = true;
-        self.emit_focus = true;
     }
 
     fn unfocus(&mut self) {
