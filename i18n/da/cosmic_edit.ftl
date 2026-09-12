@@ -1,5 +1,5 @@
 save = Gem
-cancel = Annuller
+cancel = Afbryd
 quit = Afslut
 cosmic-text-editor = COSMIC-teksteditor
 new-document = Nyt dokument

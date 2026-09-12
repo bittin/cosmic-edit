@@ -119,6 +119,7 @@ fn format_recent_menu_path(path: &PathBuf, home_dir_opt: Option<&PathBuf>) -> St
 pub fn context_menu<'a>(
     key_binds: &HashMap<KeyBind, Action>,
     entity: segmented_button::Entity,
+    has_selection: bool,
 ) -> Element<'a, Message> {
     fn key_style(theme: &cosmic::Theme) -> TextStyle {
         // TODO use wayland popups
@@ -130,7 +131,7 @@ pub fn context_menu<'a>(
         }
     }
 
-    let menu_item = |menu_label, menu_action| {
+    let base_menu_item = |menu_label, menu_action| {
         let mut key = String::new();
         for (key_bind, key_action) in key_binds.iter() {
             if key_action == &menu_action {
@@ -145,7 +146,19 @@ pub fn context_menu<'a>(
                 .class(theme::Text::Custom(key_style))
                 .into(),
         ])
-        .on_press(Message::TabContextAction(entity, menu_action))
+    };
+
+    let optional_menu_item = |menu_label, menu_action, disabled| {
+        base_menu_item(menu_label, menu_action).on_press_maybe(if disabled {
+            None
+        } else {
+            Some(Message::TabContextAction(entity, menu_action))
+        })
+    };
+
+    let menu_item = |menu_label, menu_action| {
+        base_menu_item(menu_label, menu_action)
+            .on_press(Message::TabContextAction(entity, menu_action))
     };
 
     widget::container(
@@ -153,8 +166,8 @@ pub fn context_menu<'a>(
             menu_item(fl!("undo"), Action::Undo).into(),
             menu_item(fl!("redo"), Action::Redo).into(),
             divider::horizontal::light().into(),
-            menu_item(fl!("cut"), Action::Cut).into(),
-            menu_item(fl!("copy"), Action::Copy).into(),
+            optional_menu_item(fl!("cut"), Action::Cut, !has_selection).into(),
+            optional_menu_item(fl!("copy"), Action::Copy, !has_selection).into(),
             menu_item(fl!("paste"), Action::Paste).into(),
             menu_item(fl!("select-all"), Action::SelectAll).into(),
         ]),
@@ -186,6 +199,7 @@ pub fn menu_bar<'a>(
     config_state: &ConfigState,
     key_binds: &HashMap<KeyBind, Action>,
     projects: &Vec<(String, PathBuf)>,
+    has_selection: bool,
 ) -> Element<'a, Message> {
     //TODO: port to libcosmic
     let menu_tab_width = |tab_width: u16| {
@@ -278,8 +292,16 @@ pub fn menu_bar<'a>(
                         MenuItem::Button(fl!("undo"), None, Action::Undo),
                         MenuItem::Button(fl!("redo"), None, Action::Redo),
                         MenuItem::Divider,
-                        MenuItem::Button(fl!("cut"), None, Action::Cut),
-                        MenuItem::Button(fl!("copy"), None, Action::Copy),
+                        if has_selection {
+                            MenuItem::Button(fl!("cut"), None, Action::Cut)
+                        } else {
+                            MenuItem::ButtonDisabled(fl!("cut"), None, Action::NoOp)
+                        },
+                        if has_selection {
+                            MenuItem::Button(fl!("copy"), None, Action::Copy)
+                        } else {
+                            MenuItem::ButtonDisabled(fl!("copy"), None, Action::NoOp)
+                        },
                         MenuItem::Button(fl!("paste"), None, Action::Paste),
                         MenuItem::Button(fl!("select-all"), None, Action::SelectAll),
                         MenuItem::Divider,
